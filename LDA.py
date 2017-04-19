@@ -1,80 +1,90 @@
-"""
-Dataset Input
-"""
-import pandas as pd
-df = pd.DataFrame(pd.read_csv('C:/Users/lab-jack/Desktop/new york_review.csv'))
-#df = [str(i) for i in df]
-df = df.drop("id", axis = 1)
-df = df.drop("date", axis = 1)
-df = df.drop("reviewer_name", axis = 1)
-df['id'] = df.index+1
-df = df[['id','listing_id','reviewer_id','comments']]
-test = df.head(100)
-df.head()
-# dataset output
-df.to_csv('out.csv',index=False,encoding='utf-8')
-
-"""
-Test Phase
-"""
-test = pd.DataFrame(pd.read_csv('out.csv'))
-#test = test.rename(columns = {'Unnamed: 0':'id'})
-import types
-test = df.head(100)
-# Transform to lowcase and split
-test['comments'] = test['comments'].str.lower().str.split() 
-# Select non-stopwords
-stop = stopwords.words('english')
-test['comments'] = test['comments'].apply(lambda x: [item for item in x if item not in stop and ])
-
-test['comments'] = test
-def remove_punctuation(s):
-    s = ''.join([i for i in s if i not in frozenset(string.punctuation)])
-    return s
-
-test['comments'] = test['comments'].apply(remove_punctuation)
-
-
-
-"""
-Pre-process
-
-"""
-from nltk.corpus import words
-from nltk.corpus import stopwords 
-from nltk.stem.wordnet import WordNetLemmatizer
-import string
-import nltk
-stop = set(stopwords.words('english'))
-exclude = set(string.punctuation)
-lemma = WordNetLemmatizer()
-def clean(doc):
-    stop_free = " ".join([i for i in doc.lower().split() if i not in stop])
-    punc_free = ''.join(ch for ch in stop_free if ch not in exclude)
-    normalized = " ".join(lemma.lemmatize(word) for word in punc_free.split())
-    return normalized
-
-doc_clean = [clean(doc).split() for doc in doc_complete]   
-
-
-"""
-LDA Phase
-"""
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
-sklearn.decomposition.LatentDirichletAllocation(
-	n_topics=10,
-	doc_topic_prior=None, 
-	topic_word_prior=None, 
-	learning_method=None, 
-	learning_decay=0.7, 
-	learning_offset=10.0, 
-	max_iter=10, 
-	batch_size=128, 
-	evaluate_every=-1, 
-	total_samples=1000000.0, 
-	perp_tol=0.1, 
-	mean_change_tol=0.001, 
-	max_doc_update_iter=100, 
-	n_jobs=1, 
-	verbose=0, 
-	random_state=None )
+""" 
+Dataset Input 
+""" 
+import pandas as pd 
+listings = pd.DataFrame(pd.read_csv('C:/Users/Dormitory/Desktop/listings.csv')) 
+reviews = pd.DataFrame(pd.read_csv('C:/Users/Dormitory/Desktop/reviews.csv')) 
+reviews = reviews.dropna() 
+listings.rename(columns = {'id':'listing_id'}, inplace = True) 
+reviews['room_type'] = "" 
+reviews['room_type'] = reviews['listing_id'].map(listings.set_index('listing_id')['room_type']) 
+ 
+df = reviews.copy() 
+#Select rows with values of 'Private room' in column 'room_type'. 
+df = df.loc[df['room_type'] == 'Private room'] 
+df = df.dropna() 
+ 
+""" 
+Pre-process Phase 
+""" 
+from nltk.corpus import stopwords   
+import time 
+# The TypeError: 'float' object is not iterable could happen if the data is missing a value 
+df = df.dropna() 
+pre_start = time.time() 
+ 
+# Remove Punctuations 
+import string 
+df['comments'] = [''.join(c for c in s if c not in string.punctuation) for s in df['comments']] 
+print("Remove Punctuations : ") 
+df['comments'].head(10) 
+ 
+# Transform to lowcase and split 
+df['comments'] = df['comments'].str.lower().str.split()   
+df['comments'].head(10) print("lowcase and split : ") 
+df['comments'].head(10) 
+ 
+# Remove stopwords 
+stop = stopwords.words('english') 
+df['comments'] = df['comments'].apply(lambda x: [item for item in x if item not in stop]) 
+print("Remove stopwords : ") 
+df['comments'].head(10) 
+ 
+# Stemming 
+from nltk.stem import RegexpStemmer 
+st = RegexpStemmer('ing$|s$|e$|able$', min=4) 
+for x in df['comments']: 
+        for y in x: 
+                y = st.stem(y) 
+print("Stemming : ") 
+df['comments'].head(10) 
+ 
+# Remove Strings which length > 3 
+df['comments'] = df['comments'].apply(lambda x: [item for item in x if len(item)>3 ]) 
+print("Remove Strings which length > 3    : ") 
+df['comments'].head(10) 
+ 
+pre_end = time.time() 
+print("It cost %f sec" % (pre_end - pre_start)) 
+ 
+""" 
+Group Comments by the column of 'listing_id' 
+""" 
+df2 = df[['listing_id', 'comments']].copy() 
+# To return a Dataframe 
+df2.groupby('listing_id').apply(lambda x: x.sum()) 
+ 
+""" 
+LDA Phase 
+""" 
+# Establish dictionary and corpus 
+lda_start = time.time() 
+from gensim import corpora, models 
+dictionary = corpora.Dictionary(df2['comments']) 
+corpus = [ dictionary.doc2bow(text) for text in df2['comments'] ] 
+ # Transform Bag-of-Words to TF/IDF   
+tfidf = models.TfidfModel(corpus) 
+corpus_tfidf = tfidf[corpus] 
+ 
+from nltk.probability import FreqDist 
+fdist = FreqDist(dictionary) 
+top_ten = fdist.most_common(1000) 
+lda = models.ldamodel.LdaModel(corpus=corpus_tfidf, id2word=dictionary, num_topics=20) 
+#lda = models.LdaMulticore(corpus=corpus, id2word=dictionary, num_topics=20, workers=3) 
+lda_end = time.time() 
+print("It cost %f sec" % (lda_end - lda_start)) 
+ 
+# Print Top20 topics 
+lda.print_topics(20) 
+# Print the dist. of 20th topic 
+lda.print_topic(19)
