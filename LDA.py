@@ -1,21 +1,46 @@
+# -*- coding: utf-8 -*-
+
 """ 
 Dataset Input 
 """ 
-import pandas as pd 
-listings = pd.DataFrame(pd.read_csv('C:/Users/Dormitory/Desktop/listings.csv')) 
-reviews = pd.DataFrame(pd.read_csv('C:/Users/Dormitory/Desktop/reviews.csv')) 
-reviews = reviews.dropna() 
-listings.rename(columns = {'id':'listing_id'}, inplace = True) 
-reviews['room_type'] = "" 
-reviews['room_type'] = reviews['listing_id'].map(listings.set_index('listing_id')['room_type']) 
- 
+import pandas as pd
+listings_raw = pd.DataFrame(pd.read_csv('C:/Users/lab-jack/Desktop/listings.csv'))
+reviews_raw = pd.DataFrame(pd.read_csv('C:/Users/lab-jack/Desktop/reviews.csv'))
+listings_raw.rename(columns = {'id':'listing_id'}, inplace = True)
+
+listings = listings_raw.copy()
+reviews = reviews_raw.copy().dropna()
+
+"""
+Filter listings
+    挑選 'room_type' = 'Private room'
+    40629->19532
+       
+    挑選 'beds' = 1
+    40629->13602
+    
+    挑選 'number_of_reviews'>10
+    40629->27625
+    
+    全部
+    40629->5024
+"""
+listings = listings.loc[listings['room_type'] == 'Private room']
+listings = listings.loc[listings['number_of_reviews'] > 10 ]
+listings = listings.loc[listings['beds'] == 1 ]
+
+
+
+"""
+listing和reviews mapping
+"""
+reviews['room_type'] = reviews['listing_id'].map(listings.set_index('listing_id')['room_type'])
+reviews['number_of_reviews'] = reviews['listing_id'].map(listings.set_index('listing_id')['number_of_reviews'])
 df = reviews.copy() 
-#Select rows with values of 'Private room' in column 'room_type'. 
-df = df.loc[df['room_type'] == 'Private room'] 
-df = df.dropna() 
- 
+
+
 """ 
-Pre-process Phase 
+Pre-process Phase
 """ 
 from nltk.corpus import stopwords   
 import time 
@@ -31,7 +56,7 @@ df['comments'].head(10)
  
 # Transform to lowcase and split 
 df['comments'] = df['comments'].str.lower().str.split()   
-df['comments'].head(10) print("lowcase and split : ") 
+print("lowcase and split : ") 
 df['comments'].head(10) 
  
 # Remove stopwords 
@@ -53,17 +78,19 @@ df['comments'].head(10)
 df['comments'] = df['comments'].apply(lambda x: [item for item in x if len(item)>3 ]) 
 print("Remove Strings which length > 3    : ") 
 df['comments'].head(10) 
- 
+
 pre_end = time.time() 
 print("It cost %f sec" % (pre_end - pre_start)) 
  
 """ 
 Group Comments by the column of 'listing_id' 
 """ 
-df2 = df[['listing_id', 'comments']].copy() 
+df2 = df[['listing_id', 'comments']].copy()
 # To return a Dataframe 
-df2.groupby('listing_id').apply(lambda x: x.sum()) 
- 
+df2 = df2.groupby('listing_id').apply(lambda x: x.sum()) 
+
+
+
 """ 
 LDA Phase 
 """ 
